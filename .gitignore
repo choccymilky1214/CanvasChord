@@ -173,6 +173,8 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-#API Key
+# API Key
 bot/apiKey.py
+
+# Macos cache file
 .DS_Store
