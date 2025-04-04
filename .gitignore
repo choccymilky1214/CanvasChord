@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+#API Key
+bot/apiKey.py
+.DS_Store
