@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from apiKey import testBotToken
+from apiKey import botToken
 
 # Set bot permissions 
 intents = discord.Intents.default()
@@ -23,4 +23,4 @@ async def hello(ctx):
     await ctx.send("hello!")
 
 # Start bot with token from ./bot/apiKey.py
-bot.run(testBotToken)
+bot.run(botToken)
