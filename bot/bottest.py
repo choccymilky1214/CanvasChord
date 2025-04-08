@@ -1,26 +1,42 @@
 import discord
-from discord.ext import commands
-from apiKey import botToken
+from discord import app_commands
+import apiKey
 
-# Set bot permissions 
+class MyClient(discord.Client):
+    def __init__(self, *, intents: discord.Intents):
+        super().__init__(intents=intents)
+        self.tree = app_commands.CommandTree(self)
+
+    async def setup_hook(self):
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} commands.")
+            self.tree.copy_global_to(guild=discord.Object(apiKey.ownerGuild))
+            syncedGuild = await self.tree.sync(guild=discord.Object(apiKey.ownerGuild))
+            print(f"Synced {len(syncedGuild)} commands to guild.")
+        except Exception as e:
+            print(f"Error syncing commands in setup_hook: {e}")
+
 intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
+client = MyClient(intents=intents)
 
-# Create bot object and set a prefix
-bot = commands.Bot(command_prefix='?', intents=intents)
+@client.tree.command()
+async def hello(interaction: discord.Interaction):
+    """Says hello!"""
+    await interaction.response.send_message(f'Hi, {interaction.user.mention}')
 
-# Report login to terminal
-@bot.event
+@client.tree.command()
+@app_commands.describe(
+    first_value='The first value you want to add something to',
+    second_value='The value you want to add to the first value',
+)
+async def add(interaction: discord.Interaction, first_value: int, second_value: int):
+    """Adds two numbers together."""
+    await interaction.response.send_message(f'{first_value} + {second_value} = {first_value + second_value}')
+
+@client.event
 async def on_ready():
-    print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    print(f'Logged in as {client.user} (ID: {client.user.id})')
+    print('------')
 
-# Command $hello 
-@bot.command()
-async def hello(ctx):
-
-    # Reply hello
-    await ctx.send("hello!")
-
-# Start bot with token from ./bot/apiKey.py
-bot.run(botToken)
+client.run(apiKey.botToken)
