@@ -76,6 +76,7 @@ async def send_dm(interaction: discord.Interaction, user: discord.User, message:
 
 
 # /notification_settings command
+# TODO Rewrite this to use lists instead of if statement for nicer database queries
 @client.tree.command(
     name="notification_settings", description="Edit notification settings"
 )
@@ -93,25 +94,51 @@ async def notification_settings(
     announcement_postings: Optional[bool] = None,
 ):
     # Apply settings modifications
-    if enable_notifications != None:
-        databaseFunctions.changeNotificationSetting(
-            "enable_notifications", enable_notifications, interaction.user.id
+    try:
+        if enable_notifications != None:
+            await databaseFunctions.changeNotificationSetting(
+                "enable_notifications", enable_notifications, interaction.user.id
+            )
+        if grade_postings != None:
+            await databaseFunctions.changeNotificationSetting(
+                "grade_postings", grade_postings, interaction.user.id
+            )
+        if due_dates != None:
+            await databaseFunctions.changeNotificationSetting(
+                "due_dates", due_dates, interaction.user.id
+            )
+        if announcement_postings != None:
+            await databaseFunctions.changeNotificationSetting(
+                "announcement_postings", announcement_postings, interaction.user.id
+            )
+    except Exception as e:
+        await interaction.response.send_message(
+            f"Something went wrong updating database settings\n {e}", ephemeral=True
         )
-    if grade_postings != None:
-        # TODO add setting change
-        pass
-    if due_dates != None:
-        # TODO add setting change
-        pass
-    if announcement_postings != None:
-        # TODO add setting change
-        pass
-
     # Return if notifications off
-    # TODO write return message
+    try:
+        if (
+            await databaseFunctions.getNotificationSetting(
+                "enable_notifications", interaction.user.id
+            )
+            != True
+        ):
+            await interaction.response.send_message(
+                'You have disabled notifications, to enable use this command again and make "enable-notifications" True',
+                ephemeral=True,
+            )
 
-    # Return notification settings if on
-    # TODO write return message
+        # Return current notification settings if on
+        else:
+            await interaction.response.send_message(
+                "Notifications are enabled! Changed settings updated successfully!",
+                ephemeral=True,
+            )
+    except Exception as e:
+        await interaction.response.send_message(
+            f"Something went wrong gathering your settings from the database\n {e}",
+            ephemeral=True,
+        )
 
 
 # This runs when the bot is logged in and ready.
