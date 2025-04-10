@@ -2,8 +2,8 @@ import discord
 from discord import app_commands
 from typing import Optional
 import apiKey
-from ..canvas import canvasFunctions
-from ..database import databaseFunctions
+import canvasFunctions
+import databaseFunctions
 
 
 class MyClient(discord.Client):
