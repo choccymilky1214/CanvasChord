@@ -1,5 +1,5 @@
 # CanvasCord
-Canvas discord bit written using discord.py
+Canvas discord bot written using discord.py
 
 ### Required Libraries
 ```
