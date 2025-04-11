@@ -1,3 +1,5 @@
+from typing import List, Dict, Optional
+import datetime
 import mysql.connector
 
 # This script will contain functions the bot will use for database calls.
@@ -18,5 +20,22 @@ async def changeNotificationSetting(
 
 async def getNotificationSetting(settingName: str, discordID: int) -> bool:
     # Get named setting and return its value
-    settingValue = True
-    return settingValue
+    pass
+
+
+# Gets saved reminders for a user
+async def getReminders(discordID: int) -> List[Dict]:
+    # Example return format: [{"when": datetime.datetime, "recurring": "daily", "content": "Study!"}]
+    pass
+
+
+# Saves a reminder
+async def addReminder(
+    discordID: int, when: datetime.datetime, recurring: Optional[str], content: str
+):
+    pass
+
+
+# Deletes a user's data (used for logout)
+async def deleteUser(discordID: int):
+    pass
