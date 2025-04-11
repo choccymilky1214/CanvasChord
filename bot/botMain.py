@@ -315,7 +315,7 @@ async def classlist(interaction: discord.Interaction):
 @client.tree.command(name="login", description="Connect your Canvas account.")
 async def login(interaction: discord.Interaction):
     await interaction.response.send_message(
-        f"[Click here to log in to Canvas](https://yourdomain.com/auth?user={interaction.user.id})",
+        f"[Click here to log in to Canvas](https://{apiKey.domainURL}/auth?user={interaction.user.id})",
         ephemeral=True,
     )
 
