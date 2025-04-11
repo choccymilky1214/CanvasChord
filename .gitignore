@@ -178,3 +178,6 @@ bot/apiKey.py
 
 # Macos cache file
 .DS_Store
+
+# Ignore vs code config
+.vscode/
