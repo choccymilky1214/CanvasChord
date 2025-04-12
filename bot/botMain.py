@@ -1,10 +1,10 @@
+from datetime import datetime
+from typing import Optional
 import discord
 from discord import app_commands
-from typing import Optional
 import apiKey
 import canvasFunctions
 import databaseFunctions
-from datetime import datetime
 
 
 class MyClient(discord.Client):
@@ -39,7 +39,6 @@ client = MyClient(intents=intents)
 # TODO example command, just says hello
 @client.tree.command()
 async def hello(interaction: discord.Interaction):
-    """Says hello!"""
     await interaction.response.send_message(f"Hi, {interaction.user.mention}")
 
 
@@ -50,7 +49,6 @@ async def hello(interaction: discord.Interaction):
     second_value="The value you want to add to the first value",
 )
 async def add(interaction: discord.Interaction, first_value: int, second_value: int):
-    """Adds two numbers together."""
     await interaction.response.send_message(
         f"{first_value} + {second_value} = {first_value + second_value}"
     )
@@ -60,7 +58,6 @@ async def add(interaction: discord.Interaction, first_value: int, second_value: 
 @client.tree.command(name="send_dm", description="Send a DM to a user.")
 @app_commands.describe(user="The user you want to DM", message="The message to send")
 async def send_dm(interaction: discord.Interaction, user: discord.User, message: str):
-    """Sends a DM to a specified user."""
     try:
         await user.send(message)
         await interaction.response.send_message(
@@ -76,7 +73,7 @@ async def send_dm(interaction: discord.Interaction, user: discord.User, message:
         )
 
 
-# /notification_settings command
+# /notification_settings command - sets new notification settings in the database
 # TODO Rewrite this to use lists instead of if statement for nicer database queries
 @client.tree.command(
     name="notification_settings", description="Edit notification settings"
@@ -142,25 +139,30 @@ async def notification_settings(
         )
 
 
+# /announcements - get recent announcements
+# TODO rewrite so it can autofill class's from user class list
 @client.tree.command(name="announcements", description="Get recent class announcements")
 @app_commands.describe(class_name="The name of the class to get announcements from")
 async def announcements(interaction: discord.Interaction, class_name: str):
-    """Returns recent announcements for a class."""
+    # We use defer command to tell discord to wait up to 15 minutes for a response form the bot, otherwise the command will fail if this takes time.
     await interaction.response.defer(ephemeral=True)
 
     try:
+        # Gather canvas token and list of classes
         canvas_token = await databaseFunctions.getCanvasToken(interaction.user.id)
         class_list = await canvasFunctions.getClassList(canvas_token)
 
         matched = [
             cid for name, cid in class_list if class_name.lower() in name.lower()
         ]
+        # Return if no classes found
         if not matched:
             await interaction.followup.send(
                 "No class found with that name.", ephemeral=True
             )
             return
 
+        # Return if no announcements found for class
         class_id = matched[0]
         announcements = await canvasFunctions.getAnnouncements(canvas_token, class_id)
         if not announcements:
@@ -169,6 +171,7 @@ async def announcements(interaction: discord.Interaction, class_name: str):
             )
             return
 
+        # Gather all the announcements and then send them in the message
         content = "\n\n".join(
             f"**{a['title']}**\n<{a['url']}>" for a in announcements[:5]
         )
@@ -178,6 +181,7 @@ async def announcements(interaction: discord.Interaction, class_name: str):
         await interaction.followup.send(f"Error: {e}", ephemeral=True)
 
 
+# /calendar command - get assignments for user with given date
 @client.tree.command(
     name="calendar",
     description="Get assignments between now and a future date (max 90 days)",
@@ -189,7 +193,6 @@ async def announcements(interaction: discord.Interaction, class_name: str):
 async def calendar(
     interaction: discord.Interaction, end_date: str, class_name: Optional[str] = None
 ):
-    """Returns assignments due between now and given date (max 90 days)."""
     await interaction.response.defer(ephemeral=True)
 
     try:
@@ -247,9 +250,7 @@ async def calendar(
         await interaction.followup.send(f"Error: {e}", ephemeral=True)
 
 
-from discord import app_commands
-
-
+# /reminder command -- creates a reminder.
 @client.tree.command(name="reminder", description="Set a reminder")
 @app_commands.describe(
     when="Time in 'YYYY-MM-DD HH:MM' format",
@@ -268,7 +269,6 @@ async def reminder(
     recurring: Optional[app_commands.Choice[str]],
     content: str,
 ):
-    """Schedule a DM reminder."""
     await interaction.response.defer(ephemeral=True)
 
     try:
@@ -297,6 +297,7 @@ async def reminder(
         await interaction.followup.send(f"Error setting reminder: {e}", ephemeral=True)
 
 
+# /classlist command - lists all user's classes
 @client.tree.command(name="classlist", description="List your current classes.")
 async def classlist(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -312,6 +313,7 @@ async def classlist(interaction: discord.Interaction):
         await interaction.followup.send(f"Error fetching class list: {e}")
 
 
+# /login command -- directs the user to website for login
 @client.tree.command(name="login", description="Connect your Canvas account.")
 async def login(interaction: discord.Interaction):
     await interaction.response.send_message(
@@ -320,6 +322,7 @@ async def login(interaction: discord.Interaction):
     )
 
 
+# /logout command -- logs out user from database
 @client.tree.command(name="logout", description="Delete all your data from the bot.")
 async def logout(interaction: discord.Interaction):
     try:
@@ -341,4 +344,5 @@ async def on_ready():
     print("------")
 
 
+# Start bot
 client.run(apiKey.botToken)
