@@ -36,38 +36,47 @@ intents = discord.Intents.default()
 client = MyClient(intents=intents)
 
 
-# TODO example command, just says hello
+# TODO example command - placeholder for testing basic bot interaction
+# /hello command - responds with a greeting mentioning the user
 @client.tree.command()
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hi, {interaction.user.mention}")
 
 
-# TODO example command, just adds 2 numbers
+# TODO example command - placeholder for simple argument handling
+# /add command - adds two integers and returns the result
+# Demonstrates argument parsing and simple math
 @client.tree.command()
 @app_commands.describe(
     first_value="The first value you want to add something to",
     second_value="The value you want to add to the first value",
 )
 async def add(interaction: discord.Interaction, first_value: int, second_value: int):
+    # Format and send a message showing the result of the addition
     await interaction.response.send_message(
         f"{first_value} + {second_value} = {first_value + second_value}"
     )
 
 
-# TODO example command, tests dm function
+# TODO example command - placeholder to demonstrate sending direct messages
+# /send_dm command - sends a DM to the specified user
+# Demonstrates private messaging and permission error handling
 @client.tree.command(name="send_dm", description="Send a DM to a user.")
 @app_commands.describe(user="The user you want to DM", message="The message to send")
 async def send_dm(interaction: discord.Interaction, user: discord.User, message: str):
     try:
+        # Attempt to send the message to the user
         await user.send(message)
         await interaction.response.send_message(
             f"Message sent to {user.mention}.", ephemeral=True
         )
     except discord.Forbidden:
+        # Handle case where DMs are disabled
         await interaction.response.send_message(
             "Couldn't send the message. They may have DMs disabled.", ephemeral=True
         )
     except Exception as e:
+        # Catch and report any other errors
         await interaction.response.send_message(
             f"Error sending DM: {e}", ephemeral=True
         )
@@ -181,7 +190,10 @@ async def announcements(interaction: discord.Interaction, class_name: str):
         await interaction.followup.send(f"Error: {e}", ephemeral=True)
 
 
-# /calendar command - get assignments for user with given date
+# /calendar command - retrieves upcoming assignments from Canvas
+# Accepts a future end date (max 90 days ahead) and an optional class name
+# Gathers assignments from all classes or a specific class
+# Filters by due date and formats results by class
 @client.tree.command(
     name="calendar",
     description="Get assignments between now and a future date (max 90 days)",
@@ -196,6 +208,7 @@ async def calendar(
     await interaction.response.defer(ephemeral=True)
 
     try:
+        # Validate the date format and range
         now = datetime.now()
         end = datetime.strptime(end_date, "%Y-%m-%d")
 
@@ -205,6 +218,7 @@ async def calendar(
             )
             return
 
+        # Retrieve user's Canvas token and optionally filter by class name
         canvas_token = await databaseFunctions.getCanvasToken(interaction.user.id)
         assignments = []
 
@@ -222,7 +236,7 @@ async def calendar(
             for _, cid in classes:
                 assignments += await canvasFunctions.getAssignments(canvas_token, cid)
 
-        # Filter and format
+        # Aggregate and filter assignments by due date
         filtered = [a for a in assignments if now <= a["due_date"] <= end]
         grouped = {}
         for a in filtered:
@@ -236,6 +250,7 @@ async def calendar(
             )
             return
 
+        # Group results and format message per class
         msg = ""
         for cls, items in grouped.items():
             msg += f"\n**{cls}**\n" + "\n".join(items) + "\n"
@@ -250,7 +265,9 @@ async def calendar(
         await interaction.followup.send(f"Error: {e}", ephemeral=True)
 
 
-# /reminder command -- creates a reminder.
+# /reminder command - creates a new reminder with optional recurrence
+# Accepts a future datetime, a message, and optional daily/weekly repeat
+# Saves reminder to the database and confirms setup
 @client.tree.command(name="reminder", description="Set a reminder")
 @app_commands.describe(
     when="Time in 'YYYY-MM-DD HH:MM' format",
@@ -272,6 +289,7 @@ async def reminder(
     await interaction.response.defer(ephemeral=True)
 
     try:
+        # Parse and validate the datetime input
         remind_time = datetime.strptime(when, "%Y-%m-%d %H:%M")
         if remind_time <= datetime.now():
             await interaction.followup.send(
@@ -279,11 +297,13 @@ async def reminder(
             )
             return
 
+        # Save reminder details in the database
         recurrence_value = recurring.value if recurring else None
         await databaseFunctions.addReminder(
             interaction.user.id, remind_time, recurrence_value, content
         )
 
+        # Format and send confirmation message
         note = f" and will repeat {recurrence_value}" if recurrence_value else ""
         await interaction.followup.send(
             f"Reminder set for {remind_time}{note}!", ephemeral=True
@@ -297,7 +317,9 @@ async def reminder(
         await interaction.followup.send(f"Error setting reminder: {e}", ephemeral=True)
 
 
-# /classlist command - lists all user's classes
+# /classlist command - lists the user's current enrolled Canvas classes
+# Uses Canvas API token to retrieve class list
+# Returns formatted bullet list or error
 @client.tree.command(name="classlist", description="List your current classes.")
 async def classlist(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -313,7 +335,8 @@ async def classlist(interaction: discord.Interaction):
         await interaction.followup.send(f"Error fetching class list: {e}")
 
 
-# /login command -- directs the user to website for login
+# /login command - provides a link for the user to connect their Canvas account
+# Includes user ID in query string for identification
 @client.tree.command(name="login", description="Connect your Canvas account.")
 async def login(interaction: discord.Interaction):
     await interaction.response.send_message(
@@ -322,7 +345,8 @@ async def login(interaction: discord.Interaction):
     )
 
 
-# /logout command -- logs out user from database
+# /logout command - deletes all user data from the bot
+# Calls database cleanup and confirms with user
 @client.tree.command(name="logout", description="Delete all your data from the bot.")
 async def logout(interaction: discord.Interaction):
     try:
@@ -336,13 +360,13 @@ async def logout(interaction: discord.Interaction):
         )
 
 
-# This runs when the bot is logged in and ready.
-# All commands should be above this
+# Event - triggered when the bot finishes connecting to Discord
+# Logs bot identity and startup confirmation
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user} (ID: {client.user.id})")
     print("------")
 
 
-# Start bot
+# Starts the Discord bot using the provided bot token
 client.run(apiKey.botToken)
