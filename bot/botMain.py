@@ -1,10 +1,31 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import discord
 from discord import app_commands
 import apiKey
 import canvasFunctions
 import databaseFunctions
+
+
+async def class_name_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> List[app_commands.Choice[str]]:
+    try:
+        token = await databaseFunctions.getCanvasToken(interaction.user.id)
+        classes = await canvasFunctions.getClassList(token)
+
+        # Filter classes based on what user is typing (`current`)
+        matches = [
+            app_commands.Choice(name=name, value=name)
+            for name, _ in classes
+            if current.lower() in name.lower()
+        ][
+            :25
+        ]  # Max 25 results
+        return matches
+
+    except Exception:
+        return []  # Return empty if anything fails
 
 
 class MyClient(discord.Client):
@@ -102,6 +123,7 @@ async def notification_settings(
 # TODO rewrite so it can autofill class's from user class list
 @client.tree.command(name="announcements", description="Get recent class announcements")
 @app_commands.describe(class_name="The name of the class to get announcements from")
+@app_commands.autocomplete(class_name=class_name_autocomplete)
 async def announcements(interaction: discord.Interaction, class_name: str):
     # We use defer command to tell discord to wait up to 15 minutes for a response form the bot, otherwise the command will fail if this takes time.
     await interaction.response.defer(ephemeral=True)
@@ -152,6 +174,7 @@ async def announcements(interaction: discord.Interaction, class_name: str):
     end_date="The last date to look for assignments (YYYY-MM-DD)",
     class_name="Optional class name",
 )
+@app_commands.autocomplete(class_name=class_name_autocomplete)
 async def calendar(
     interaction: discord.Interaction, end_date: str, class_name: Optional[str] = None
 ):
@@ -289,6 +312,7 @@ async def classlist(interaction: discord.Interaction):
 # Includes user ID in query string for identification
 @client.tree.command(name="login", description="Connect your Canvas account.")
 async def login(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     await interaction.response.send_message(
         f"[Click here to log in to Canvas](https://{apiKey.domainURL}/auth?user={interaction.user.id})",
         ephemeral=True,
@@ -299,6 +323,7 @@ async def login(interaction: discord.Interaction):
 # Calls database cleanup and confirms with user
 @client.tree.command(name="logout", description="Delete all your data from the bot.")
 async def logout(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
     try:
         await databaseFunctions.deleteUser(interaction.user.id)
         await interaction.response.send_message(
