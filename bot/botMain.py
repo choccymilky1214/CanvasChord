@@ -7,6 +7,20 @@ import canvasFunctions
 import databaseFunctions
 
 
+async def ensure_logged_in(interaction: discord.Interaction) -> Optional[str]:
+    try:
+        token = await databaseFunctions.getCanvasToken(interaction.user.id)
+        if not token:
+            raise ValueError("No token")
+        return token
+    except Exception:
+        await interaction.response.send_message(
+            f"You are not logged in. Please use the /login command or visit: https://{apiKey.domainURL}/auth?user={interaction.user.id}",
+            ephemeral=True,
+        )
+        return None
+
+
 async def class_name_autocomplete(
     interaction: discord.Interaction, current: str
 ) -> List[app_commands.Choice[str]]:
@@ -77,6 +91,9 @@ async def notification_settings(
 ):
     # Defer response to prevent timeout
     await interaction.response.defer(ephemeral=True)
+    canvas_token = await ensure_logged_in(interaction)
+    if not canvas_token:
+        return
 
     # Collect only the provided settings
     new_settings = {
@@ -130,7 +147,10 @@ async def announcements(interaction: discord.Interaction, class_name: str):
 
     try:
         # Gather canvas token and list of classes
-        canvas_token = await databaseFunctions.getCanvasToken(interaction.user.id)
+        canvas_token = await ensure_logged_in(interaction)
+        if not canvas_token:
+            return
+
         class_list = await canvasFunctions.getClassList(canvas_token)
 
         matched = [
@@ -192,7 +212,9 @@ async def calendar(
             return
 
         # Retrieve user's Canvas token and optionally filter by class name
-        canvas_token = await databaseFunctions.getCanvasToken(interaction.user.id)
+        canvas_token = await ensure_logged_in(interaction)
+        if not canvas_token:
+            return
         assignments = []
 
         if class_name:
@@ -270,6 +292,11 @@ async def reminder(
             )
             return
 
+        # Check if user is logged in
+        token_check = await ensure_logged_in(interaction)
+        if not token_check:
+            return
+
         # Save reminder details in the database
         recurrence_value = recurring.value if recurring else None
         await databaseFunctions.addReminder(
@@ -297,7 +324,9 @@ async def reminder(
 async def classlist(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
-        token = await databaseFunctions.getCanvasToken(interaction.user.id)
+        token = await ensure_logged_in(interaction)
+        if not token:
+            return
         classes = await canvasFunctions.getClassList(token)
         if not classes:
             await interaction.followup.send("No classes found.")
