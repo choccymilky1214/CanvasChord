@@ -7,19 +7,18 @@ import mysql.connector
 
 async def getCanvasToken(discordID: int) -> int:
     # Get canvas token from discord id then return
-    canvasToken = 123456789
-    return canvasToken
+    pass
 
 
-async def changeNotificationSetting(
-    settingName: str, settingValue: int, discordID: int
-):
-    # Change notification setting in database then return
-    return
+# Returns all notification settings for a user
+async def getNotificationSettings(discordID: int) -> Dict[str, bool]:
+    # Example return: {"enable_notifications": True, "grade_postings": False, ...}
+    pass
 
 
-async def getNotificationSetting(settingName: str, discordID: int) -> bool:
-    # Get named setting and return its value
+# Updates multiple notification settings at once
+async def changeNotificationSettings(discordID: int, settings: Dict[str, bool]):
+    # settings will be a dict like {"grade_postings": True, "due_dates": False}
     pass
 
 

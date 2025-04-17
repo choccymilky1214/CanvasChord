@@ -36,52 +36,6 @@ intents = discord.Intents.default()
 client = MyClient(intents=intents)
 
 
-# TODO example command - placeholder for testing basic bot interaction
-# /hello command - responds with a greeting mentioning the user
-@client.tree.command()
-async def hello(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Hi, {interaction.user.mention}")
-
-
-# TODO example command - placeholder for simple argument handling
-# /add command - adds two integers and returns the result
-# Demonstrates argument parsing and simple math
-@client.tree.command()
-@app_commands.describe(
-    first_value="The first value you want to add something to",
-    second_value="The value you want to add to the first value",
-)
-async def add(interaction: discord.Interaction, first_value: int, second_value: int):
-    # Format and send a message showing the result of the addition
-    await interaction.response.send_message(
-        f"{first_value} + {second_value} = {first_value + second_value}"
-    )
-
-
-# TODO example command - placeholder to demonstrate sending direct messages
-# /send_dm command - sends a DM to the specified user
-# Demonstrates private messaging and permission error handling
-@client.tree.command(name="send_dm", description="Send a DM to a user.")
-@app_commands.describe(user="The user you want to DM", message="The message to send")
-async def send_dm(interaction: discord.Interaction, user: discord.User, message: str):
-    try:
-        # Attempt to send the message to the user
-        await user.send(message)
-        await interaction.response.send_message(
-            f"Message sent to {user.mention}.", ephemeral=True
-        )
-    except discord.Forbidden:
-        # Handle case where DMs are disabled
-        await interaction.response.send_message(
-            "Couldn't send the message. They may have DMs disabled.", ephemeral=True
-        )
-    except Exception as e:
-        # Catch and report any other errors
-        await interaction.response.send_message(
-            f"Error sending DM: {e}", ephemeral=True
-        )
-
-
 # /notification_settings command - sets new notification settings in the database
 # TODO Rewrite this to use lists instead of if statement for nicer database queries
 @client.tree.command(
@@ -100,51 +54,47 @@ async def notification_settings(
     due_dates: Optional[bool] = None,
     announcement_postings: Optional[bool] = None,
 ):
-    # Apply settings modifications
+    # Defer response to prevent timeout
+    await interaction.response.defer(ephemeral=True)
+
+    # Collect only the provided settings
+    new_settings = {
+        k: v
+        for k, v in {
+            "enable_notifications": enable_notifications,
+            "grade_postings": grade_postings,
+            "due_dates": due_dates,
+            "announcement_postings": announcement_postings,
+        }.items()
+        if v is not None
+    }
+
     try:
-        if enable_notifications != None:
-            await databaseFunctions.changeNotificationSetting(
-                "enable_notifications", enable_notifications, interaction.user.id
+        # Update only if there are any settings provided
+        if new_settings:
+            await databaseFunctions.changeNotificationSettings(
+                interaction.user.id, new_settings
             )
-        if grade_postings != None:
-            await databaseFunctions.changeNotificationSetting(
-                "grade_postings", grade_postings, interaction.user.id
-            )
-        if due_dates != None:
-            await databaseFunctions.changeNotificationSetting(
-                "due_dates", due_dates, interaction.user.id
-            )
-        if announcement_postings != None:
-            await databaseFunctions.changeNotificationSetting(
-                "announcement_postings", announcement_postings, interaction.user.id
-            )
-    except Exception as e:
-        await interaction.response.send_message(
-            f"Something went wrong updating database settings\n {e}", ephemeral=True
+
+        # Fetch updated settings to determine response
+        current_settings = await databaseFunctions.getNotificationSettings(
+            interaction.user.id
         )
-    # Return if notifications off
-    try:
-        if (
-            await databaseFunctions.getNotificationSetting(
-                "enable_notifications", interaction.user.id
+
+        if not current_settings.get("enable_notifications", False):
+            await interaction.followup.send(
+                'You have disabled notifications. To enable them, use this command again and set "enable-notifications" to True.',
+                ephemeral=True,
             )
-            != True
-        ):
-            await interaction.response.send_message(
-                'You have disabled notifications, to enable use this command again and make "enable-notifications" True',
+        else:
+            await interaction.followup.send(
+                "Notifications are enabled! Your settings were updated successfully!",
                 ephemeral=True,
             )
 
-        # Return current notification settings if on
-        else:
-            await interaction.response.send_message(
-                "Notifications are enabled! Changed settings updated successfully!",
-                ephemeral=True,
-            )
     except Exception as e:
-        await interaction.response.send_message(
-            f"Something went wrong gathering your settings from the database\n {e}",
-            ephemeral=True,
+        await interaction.followup.send(
+            f"Something went wrong updating your settings:\n{e}", ephemeral=True
         )
 
 
