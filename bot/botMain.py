@@ -9,15 +9,22 @@ import databaseFunctions
 
 async def ensure_logged_in(interaction: discord.Interaction) -> Optional[str]:
     try:
-        token = await databaseFunctions.getCanvasToken(interaction.user.id)
-        if not token:
+        token_data = await databaseFunctions.getCanvasToken(interaction.user.id)
+        if not token_data:
             raise ValueError("No token")
-        return token
+        return token_data  # Now returns (token, domain)
     except Exception:
-        await interaction.response.send_message(
-            f"You are not logged in. Please use the /login command or visit: https://{apiKey.domainURL}/auth?user={interaction.user.id}",
-            ephemeral=True,
+        message = (
+            f"You are not logged in. Please use the /login command or visit: "
+            f"https://{apiKey.domainURL}/auth?user={interaction.user.id}"
         )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        except Exception:
+            pass
         return None
 
 
@@ -25,8 +32,11 @@ async def class_name_autocomplete(
     interaction: discord.Interaction, current: str
 ) -> List[app_commands.Choice[str]]:
     try:
-        token = await databaseFunctions.getCanvasToken(interaction.user.id)
-        classes = await canvasFunctions.getClassList(token)
+        token_data = await databaseFunctions.getCanvasToken(interaction.user.id)
+        if not token_data:
+            return []
+        canvas_token, canvas_domain = token_data
+        classes = await canvasFunctions.getClassList(canvas_token, canvas_domain)
 
         # Filter classes based on what user is typing (`current`)
         matches = [
@@ -90,7 +100,6 @@ async def notification_settings(
     announcement_postings: Optional[bool] = None,
 ):
     # Defer response to prevent timeout
-    await interaction.response.defer(ephemeral=True)
     canvas_token = await ensure_logged_in(interaction)
     if not canvas_token:
         return
@@ -137,7 +146,6 @@ async def notification_settings(
 
 
 # /announcements - get recent announcements
-# TODO rewrite so it can autofill class's from user class list
 @client.tree.command(name="announcements", description="Get recent class announcements")
 @app_commands.describe(class_name="The name of the class to get announcements from")
 @app_commands.autocomplete(class_name=class_name_autocomplete)
@@ -147,25 +155,38 @@ async def announcements(interaction: discord.Interaction, class_name: str):
 
     try:
         # Gather canvas token and list of classes
-        canvas_token = await ensure_logged_in(interaction)
-        if not canvas_token:
+        token_data = await ensure_logged_in(interaction)
+        if not token_data:
             return
+        canvas_token, canvas_domain = token_data
 
-        class_list = await canvasFunctions.getClassList(canvas_token)
+        class_list = await canvasFunctions.getClassList(canvas_token, canvas_domain)
 
         matched = [
             cid for name, cid in class_list if class_name.lower() in name.lower()
         ]
-        # Return if no classes found
+        # Enforce strict match using autocomplete names
+        matched_names = [name for name, _ in class_list]
+        if class_name not in matched_names:
+            await interaction.followup.send(
+                "Invalid class name. Please use the suggested autocomplete options.",
+                ephemeral=True,
+            )
+            return
+
+        # Proceed with matching class ID
+        matched = [cid for name, cid in class_list if name == class_name]
         if not matched:
             await interaction.followup.send(
-                "No class found with that name.", ephemeral=True
+                "Something went wrong matching that class name.", ephemeral=True
             )
             return
 
         # Return if no announcements found for class
         class_id = matched[0]
-        announcements = await canvasFunctions.getAnnouncements(canvas_token, class_id)
+        announcements = await canvasFunctions.getAnnouncements(
+            canvas_token, class_id, canvas_domain
+        )
         if not announcements:
             await interaction.followup.send(
                 "No recent announcements found.", ephemeral=True
@@ -212,24 +233,29 @@ async def calendar(
             return
 
         # Retrieve user's Canvas token and optionally filter by class name
-        canvas_token = await ensure_logged_in(interaction)
-        if not canvas_token:
+        token_data = await ensure_logged_in(interaction)
+        if not token_data:
             return
+        canvas_token, canvas_domain = token_data
         assignments = []
 
         if class_name:
-            classes = await canvasFunctions.getClassList(canvas_token)
+            classes = await canvasFunctions.getClassList(canvas_token, canvas_domain)
             matched = [
                 cid for name, cid in classes if class_name.lower() in name.lower()
             ]
             if not matched:
                 await interaction.followup.send("Class not found.", ephemeral=True)
                 return
-            assignments = await canvasFunctions.getAssignments(canvas_token, matched[0])
+            assignments = await canvasFunctions.getAssignments(
+                canvas_token, matched[0], class_name, canvas_domain
+            )
         else:
-            classes = await canvasFunctions.getClassList(canvas_token)
+            classes = await canvasFunctions.getClassList(canvas_token, canvas_domain)
             for _, cid in classes:
-                assignments += await canvasFunctions.getAssignments(canvas_token, cid)
+                assignments += await canvasFunctions.getAssignments(
+                    canvas_token, cid, "", canvas_domain
+                )
 
         # Aggregate and filter assignments by due date
         filtered = [a for a in assignments if now <= a["due_date"] <= end]
@@ -324,10 +350,11 @@ async def reminder(
 async def classlist(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
-        token = await ensure_logged_in(interaction)
-        if not token:
+        token_data = await ensure_logged_in(interaction)
+        if not token_data:
             return
-        classes = await canvasFunctions.getClassList(token)
+        canvas_token, canvas_domain = token_data
+        classes = await canvasFunctions.getClassList(canvas_token, canvas_domain)
         if not classes:
             await interaction.followup.send("No classes found.")
             return
@@ -341,7 +368,6 @@ async def classlist(interaction: discord.Interaction):
 # Includes user ID in query string for identification
 @client.tree.command(name="login", description="Connect your Canvas account.")
 async def login(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
     await interaction.response.send_message(
         f"[Click here to log in to Canvas](https://{apiKey.domainURL}/auth?user={interaction.user.id})",
         ephemeral=True,
@@ -355,13 +381,9 @@ async def logout(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     try:
         await databaseFunctions.deleteUser(interaction.user.id)
-        await interaction.response.send_message(
-            "Your data has been deleted.", ephemeral=True
-        )
+        await interaction.followup.send("Your data has been deleted.", ephemeral=True)
     except Exception as e:
-        await interaction.response.send_message(
-            f"Error during logout: {e}", ephemeral=True
-        )
+        await interaction.followup.send(f"Error during logout: {e}", ephemeral=True)
 
 
 # Event - triggered when the bot finishes connecting to Discord
